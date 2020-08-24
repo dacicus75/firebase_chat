@@ -40,5 +40,31 @@ exports.addWelcomeMessages = functions.auth.user().onCreate(async (user) => {
     console.log('Welcome message written to database.');
   });
 // TODO(DEVELOPER): Write the blurOffensiveImages Function here.
+const Vision = require('@google-cloud/vision');
+const vision = new Vision();
+const spawn = require('child-process-promise').spawn;
+
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+
+// Checks if uploaded images are flagged as Adult or Violence and if so blurs them.
+exports.blurOffensiveImages = functions.runWith({memory: '2GB'}).storage.object().onFinalize(
+  async (object) => {
+    const image = {
+      source: {imageUri: `gs://${object.bucket}/${object.name}`},
+    };
+
+    // Check the image content using the Cloud Vision API.
+    const batchAnnotateImagesResponse = await vision.safeSearchDetection(image);
+    const safeSearchResult = batchAnnotateImagesResponse[0].safeSearchAnnotation;
+    const Likelihood = Vision.types.Likelihood;
+    if (Likelihood[safeSearchResult.adult] >= Likelihood.LIKELY ||
+        Likelihood[safeSearchResult.violence] >= Likelihood.LIKELY) {
+      console.log('The image', object.name, 'has been detected as inappropriate.');
+      return blurImage(object.name);
+    }
+    console.log('The image', object.name, 'has been detected as OK.');
+  });
 
 // TODO(DEVELOPER): Write the sendNotifications Function here.
